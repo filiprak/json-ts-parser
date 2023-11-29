@@ -4,7 +4,7 @@
   "description": "",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "nodemon src/index.ts"
+    "dev": "nodemon --delay 2.0 src/index.ts"
   },
   "author": "Filip Rak",
   "license": "MIT",
@@ -12,5 +12,8 @@
     "nodemon": "^3.0.1",
     "ts-node": "^10.9.1",
     "typescript": "^5.3.2"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.1.13"
   }
 }
