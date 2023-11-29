@@ -27,24 +27,26 @@ function getAncestors(target: Function): Function[] {
     return ancestors_map.get(target) || [];
 }
 
-function parseKey<T>(key: string, cls: Function, data: any): T | undefined {
-    data = data || {};
-    
+function parseKey(meta: PropMeta, data: any): any {
+    const { constr: cls, key } = meta;
+
+    console.log('parseKey', key, cls, data)
+
     if (cls === String) {
-        return (data as any)[key];
+        return String(data);
 
     } else if (cls === Number) {
-        return (data as any)[key];
+        return Number(data);
 
     } else if (cls === Object) {
-        return (data as any)[key];
+        return { ...data };
 
     } else {
-        return parse(cls as Class<any>, data[key]);
+        return parse(cls as Class<any>, data);
     }
 }
 
-function parse<T>(cls: Class<T>, data: unknown): T | undefined {
+function parse<T>(cls: Class<T>, data: any): T | undefined {
     const schema = meta.get(cls);
 
     if (schema) {
@@ -52,20 +54,25 @@ function parse<T>(cls: Class<T>, data: unknown): T | undefined {
         const ancestors = getAncestors(cls);
         const processed: Record<string, boolean> = {};
 
-        schema.forEach((prop, key) => {
-            (obj as any)[key] = parseKey(key, prop.constr, data);
-            processed[key] = true;
-        });
+        const process = (prop_meta: PropMeta, key: string) => {
+            if (!processed[key]) {
+                if (
+                    data &&
+                    data[key] !== undefined &&
+                    data[key] !== null
+                ) {
+                    (obj as any)[key] = parseKey(prop_meta, data[key]);
+                    processed[key] = true;
+                }
+            }
+        }
+
+        schema.forEach(process);
         ancestors.forEach(ancestor => {
             const a_schema = meta.get(ancestor);
 
             if (a_schema) {
-                a_schema.forEach((a_prop, a_key) => {
-                    if (!processed[a_key]) {
-                        (obj as any)[a_key] = parseKey(a_key, a_prop.constr, data);
-                        processed[a_key] = true;
-                    }
-                });
+                a_schema.forEach(process);
             }
         });
 
@@ -75,65 +82,75 @@ function parse<T>(cls: Class<T>, data: unknown): T | undefined {
     }
 }
 
-const Prop = (): PropertyDecorator => {
+function setMeta(target: Object, key: string | symbol, type?: Function) {
+    const t = type || Reflect.getMetadata("design:type", target, key);
+
+    if (!meta.has(target.constructor)) {
+        meta.set(target.constructor, new Map<string, PropMeta>());
+    }
+
+    key = String(key);
+
+    meta.get(target.constructor)?.set(key, {
+        constr: t,
+        key: key,
+    });
+}
+
+const Json = (type?: Function): PropertyDecorator => {
     return (target, key): void => {
-        const t = Reflect.getMetadata("design:type", target, key);
+        setMeta(target, key, type);
+    };
+}
 
-        console.log(key, t)
+const JsonObject = (type: Function): PropertyDecorator => {
+    return (target, key): void => {
+        setMeta(target, key, type);
+    };
+}
 
-        if (!meta.has(target.constructor)) {
-            meta.set(target.constructor, new Map<string, PropMeta>());
-        }
-        if (typeof key !== 'symbol') {
-            meta.get(target.constructor)?.set(key, {
-                constr: t,
-                key: key,
-            });
-        }
+const JsonArray = (type: Function): PropertyDecorator => {
+    return (target, key): void => {
+        setMeta(target, key, Array);
     };
 }
 
 class User {
-    @Prop()
+    @Json()
     name?: string;
 
-    @Prop()
+    @Json()
     surname?: string;
 
     x = '1';
 }
 
 class Geo {
-    @Prop()
+    @Json()
     x: number = 0;
 
-    @Prop()
+    @Json()
     y: number = 0;
 }
 
 class Me extends User {
-    @Prop()
-    name?: string = undefined;
+    @Json()
+    name: string = '';
 
-    @Prop()
+    @Json()
     ggg?: number;
 
-    @Prop()
+    @Json()
     pos?: Set<string>;
 
-    @Prop()
-    geo = {
-        x: 0,
-        y: 0,
-    };
+    @JsonArray(Geo)
+    geo?: Geo | number = 1;
 
-    @Prop()
-    g?: Geo;
-
-    @Prop()
+    @Json()
     map?: Record<number, string>;
 }
 
 const u = new User();
 
-console.log(parse(Me, { name: 'asd', geo: { x: 566 } }))
+console.log(parse(Me, { name: '', surname: 55, geo: {  } }))
+console.log(meta);
